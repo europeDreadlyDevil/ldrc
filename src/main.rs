@@ -13,6 +13,8 @@ use fs_extra::dir::copy;
 struct Args {
     #[arg(short, long)]
     path: String,
+    #[arg(short, long)]
+    stop_container: Option<bool>
 }
 
 
@@ -37,11 +39,9 @@ fn main() {
     volumes:
       - ./:/project/
       - ./target:/project/target");
-                    println!("{compose_content}");
                     let mut docker_compose_file = File::create(&temp_path.join("docker-compose.yml")).unwrap();
                     docker_compose_file.write_all(compose_content.as_bytes()).unwrap();
                     env::set_current_dir(&temp_path).unwrap();
-                    println!("{:?}", env::current_dir().unwrap());
                     let mut build_command = Command::new("docker-compose")
                         .arg("build")
                         .spawn()
@@ -50,7 +50,6 @@ fn main() {
                     let build_status = build_command.wait().expect("Failed to wait for docker-compose build");
 
                     if build_status.success() {
-                        println!("Docker-compose build executed successfully");
 
                         let mut up_command = Command::new("docker-compose")
                             .arg("up")
@@ -59,12 +58,14 @@ fn main() {
 
                         up_command.wait().expect("Failed to wait for docker-compose up");
 
-                        let mut remove_command = Command::new("docker-compose")
-                            .arg("down")
-                            .spawn()
-                            .expect("Failed to execute docker-compose up");
+                        if args.stop_container.is_none() || args.stop_container == Some(true) {
+                            let mut remove_command = Command::new("docker-compose")
+                                .arg("down")
+                                .spawn()
+                                .expect("Failed to execute docker-compose up");
 
-                        remove_command.wait().expect("Failed to wait for docker rm ldrc");
+                            remove_command.wait().expect("Failed to wait for docker rm ldrc");
+                        }
                     }
                     if let Err(err) = copy(env::current_dir().unwrap().join("target/debug"), PathBuf::from(path).join("target/linux"), &options) {
                         eprintln!("Error when copying a directory: {}", err)
